@@ -1,0 +1,16 @@
+## Rodar todos containers em segundo plano
+docker compose up -d
+
+## Verificar quais containers estão rodando
+docker ps
+
+## Iniciar container específico
+docker start laravel_app
+docker start laravel_nginx
+docker start laravel_db
+
+## Reconstruir containers (Em caso de alteração no Dockerfile ou docker-compose.yml)
+docker compose up -d --build
+
+## Usar o terminal para o Laravel
+docker exec -it laravel_app bash
