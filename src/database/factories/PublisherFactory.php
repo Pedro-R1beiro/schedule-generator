@@ -2,11 +2,11 @@
 
 namespace Database\Factories;
 
-use App\Models\Publishers;
+use App\Models\Publisher;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends Factory<Publishers>
+ * @extends Factory<Publisher>
  */
 class PublishersFactory extends Factory
 {
