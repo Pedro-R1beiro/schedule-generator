@@ -32,4 +32,10 @@ class WeekdayTimeSlot extends Model
     {
         return $this->belongsTo(TimeSlot::class);
     }
+
+    // Relacionamento com FixedPair
+    public function fixedPairs()
+    {
+        return $this->hasMany(FixedPair::class);
+    }
 }
