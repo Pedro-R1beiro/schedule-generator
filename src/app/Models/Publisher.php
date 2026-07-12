@@ -20,7 +20,8 @@ class Publisher extends Model
         'weekly_limit',
         'is_pioneer',
         'gender',
-        'start_day'
+        'start_day',
+        'pairing_preference_mode'
     ];
 
     protected $casts = [
@@ -32,60 +33,76 @@ class Publisher extends Model
         'start_day' => 'integer'
     ];
 
-    // Restrições solicitadas por este publisher
-    public function requestedRestrictions()
+    // Constantes para os modos de preferência
+    const PREFERENCE_MODE_ONLY = 'ONLY';
+    const PREFERENCE_MODE_PRIORITY = 'PRIORITY';
+
+    // Preferências solicitadas por este publisher
+    public function requestedPreferences()
     {
-        return $this->hasMany(PublisherPairRestriction::class, 'requester_publisher_id');
+        return $this->hasMany(PublisherPairPreference::class, 'requester_publisher_id');
     }
 
-    // Restrições onde este publisher é restrito
-    public function restrictedByOthers()
+    // Preferências onde este publisher é preferido
+    public function preferredByOthers()
     {
-        return $this->hasMany(PublisherPairRestriction::class, 'restricted_publisher_id');
+        return $this->hasMany(PublisherPairPreference::class, 'preferred_publisher_id');
     }
 
-    // Todas as restrições envolvendo este publisher
-    public function allRestrictions()
+    // Todas as preferências envolvendo este publisher
+    public function allPreferences()
     {
-        return $this->requestedRestrictions->merge($this->restrictedByOthers);
+        return $this->requestedPreferences->merge($this->preferredByOthers);
     }
 
-    // Verifica se este publisher tem restrição contra outro
-    public function hasRestrictionAgainst($publisherId)
-    {
-        return PublisherPairRestriction::hasRestriction($this->id, $publisherId);
-    }
-
-    // Verifica se este publisher é restrito por outro
-    public function isRestrictedBy($publisherId)
-    {
-        return PublisherPairRestriction::hasRestriction($publisherId, $this->id);
-    }
-
-    // Verifica se há restrição em qualquer direção
-    public function hasAnyRestrictionWith($publisherId)
-    {
-        return PublisherPairRestriction::hasAnyRestriction($this->id, $publisherId);
-    }
-
-    // Retorna lista de publishers restritos por este
-    public function restrictedPublishers()
+    // Retorna lista de publishers preferidos por este
+    public function preferredPublishers()
     {
         return Publisher::whereIn('id', function ($query) {
-            $query->select('restricted_publisher_id')
-                  ->from('publisher_pair_restrictions')
+            $query->select('preferred_publisher_id')
+                  ->from('publisher_pair_preferences')
                   ->where('requester_publisher_id', $this->id);
         })->get();
     }
 
-    // Retorna lista de publishers que restringem este
-    public function publishersThatRestrictMe()
+    // Retorna lista de publishers que preferem este
+    public function publishersThatPreferMe()
     {
         return Publisher::whereIn('id', function ($query) {
             $query->select('requester_publisher_id')
-                  ->from('publisher_pair_restrictions')
-                  ->where('restricted_publisher_id', $this->id);
+                  ->from('publisher_pair_preferences')
+                  ->where('preferred_publisher_id', $this->id);
         })->get();
+    }
+
+    // Verifica se este publisher tem preferência por outro
+    public function hasPreferenceFor($publisherId)
+    {
+        return PublisherPairPreference::hasPreference($this->id, $publisherId);
+    }
+
+    // Verifica se este publisher é preferido por outro
+    public function isPreferredBy($publisherId)
+    {
+        return PublisherPairPreference::hasPreference($publisherId, $this->id);
+    }
+
+    // Verifica se há preferência em qualquer direção
+    public function hasAnyPreferenceWith($publisherId)
+    {
+        return PublisherPairPreference::hasAnyPreference($this->id, $publisherId);
+    }
+
+    // Verifica se o modo é ONLY
+    public function isPreferenceModeOnly()
+    {
+        return $this->pairing_preference_mode === self::PREFERENCE_MODE_ONLY;
+    }
+
+    // Verifica se o modo é PRIORITY
+    public function isPreferenceModePriority()
+    {
+        return $this->pairing_preference_mode === self::PREFERENCE_MODE_PRIORITY;
     }
 
     // Scopes existentes
@@ -99,6 +116,16 @@ class Publisher extends Model
         return $query->where('is_pioneer', true);
     }
 
+    public function scopePreferenceModeOnly($query)
+    {
+        return $query->where('pairing_preference_mode', self::PREFERENCE_MODE_ONLY);
+    }
+
+    public function scopePreferenceModePriority($query)
+    {
+        return $query->where('pairing_preference_mode', self::PREFERENCE_MODE_PRIORITY);
+    }
+
     // Relacionamentos com FixedPair (adicionados anteriormente)
     public function fixedPairsAsOne()
     {
@@ -108,5 +135,16 @@ class Publisher extends Model
     public function fixedPairsAsTwo()
     {
         return $this->hasMany(FixedPair::class, 'publisher_two_id');
+    }
+
+    // Relacionamentos com Restrições (adicionados anteriormente)
+    public function requestedRestrictions()
+    {
+        return $this->hasMany(PublisherPairRestriction::class, 'requester_publisher_id');
+    }
+
+    public function restrictedByOthers()
+    {
+        return $this->hasMany(PublisherPairRestriction::class, 'restricted_publisher_id');
     }
 }
