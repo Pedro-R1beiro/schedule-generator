@@ -37,83 +37,141 @@ class Publisher extends Model
     const PREFERENCE_MODE_ONLY = 'ONLY';
     const PREFERENCE_MODE_PRIORITY = 'PRIORITY';
 
-    // Preferências solicitadas por este publisher
+    // Constantes para gênero
+    const GENDER_MALE = 'M';
+    const GENDER_FEMALE = 'F';
+
+    // Labels para exibição
+    const GENDER_LABELS = [
+        'M' => 'Masculino',
+        'F' => 'Feminino'
+    ];
+
+    const PREFERENCE_MODE_LABELS = [
+        'ONLY' => 'Somente',
+        'PRIORITY' => 'Prioridade'
+    ];
+
+    // Relacionamentos
+    public function fixedPairsAsOne()
+    {
+        return $this->hasMany(FixedPair::class, 'publisher_one_id');
+    }
+
+    public function fixedPairsAsTwo()
+    {
+        return $this->hasMany(FixedPair::class, 'publisher_two_id');
+    }
+
+    public function requestedRestrictions()
+    {
+        return $this->hasMany(PublisherPairRestriction::class, 'requester_publisher_id');
+    }
+
+    public function restrictedByOthers()
+    {
+        return $this->hasMany(PublisherPairRestriction::class, 'restricted_publisher_id');
+    }
+
     public function requestedPreferences()
     {
         return $this->hasMany(PublisherPairPreference::class, 'requester_publisher_id');
     }
 
-    // Preferências onde este publisher é preferido
     public function preferredByOthers()
     {
         return $this->hasMany(PublisherPairPreference::class, 'preferred_publisher_id');
     }
 
-    // Todas as preferências envolvendo este publisher
-    public function allPreferences()
+    // Todos os fixed pairs onde este publisher está envolvido
+    public function getAllFixedPairs()
     {
-        return $this->requestedPreferences->merge($this->preferredByOthers);
+        return FixedPair::where('publisher_one_id', $this->id)
+                        ->orWhere('publisher_two_id', $this->id)
+                        ->get();
     }
 
-    // Retorna lista de publishers preferidos por este
-    public function preferredPublishers()
-    {
-        return Publisher::whereIn('id', function ($query) {
-            $query->select('preferred_publisher_id')
-                  ->from('publisher_pair_preferences')
-                  ->where('requester_publisher_id', $this->id);
-        })->get();
-    }
-
-    // Retorna lista de publishers que preferem este
-    public function publishersThatPreferMe()
-    {
-        return Publisher::whereIn('id', function ($query) {
-            $query->select('requester_publisher_id')
-                  ->from('publisher_pair_preferences')
-                  ->where('preferred_publisher_id', $this->id);
-        })->get();
-    }
-
-    // Verifica se este publisher tem preferência por outro
-    public function hasPreferenceFor($publisherId)
-    {
-        return PublisherPairPreference::hasPreference($this->id, $publisherId);
-    }
-
-    // Verifica se este publisher é preferido por outro
-    public function isPreferredBy($publisherId)
-    {
-        return PublisherPairPreference::hasPreference($publisherId, $this->id);
-    }
-
-    // Verifica se há preferência em qualquer direção
-    public function hasAnyPreferenceWith($publisherId)
-    {
-        return PublisherPairPreference::hasAnyPreference($this->id, $publisherId);
-    }
-
-    // Verifica se o modo é ONLY
-    public function isPreferenceModeOnly()
+    // Verifica se o publisher está em modo ONLY
+    public function isPreferenceModeOnly(): bool
     {
         return $this->pairing_preference_mode === self::PREFERENCE_MODE_ONLY;
     }
 
-    // Verifica se o modo é PRIORITY
-    public function isPreferenceModePriority()
+    // Verifica se o publisher está em modo PRIORITY
+    public function isPreferenceModePriority(): bool
     {
         return $this->pairing_preference_mode === self::PREFERENCE_MODE_PRIORITY;
     }
 
-    // Scopes existentes
+    // Retorna label do gênero
+    public function getGenderLabel(): string
+    {
+        return self::GENDER_LABELS[$this->gender] ?? 'Desconhecido';
+    }
+
+    // Retorna label do modo de preferência
+    public function getPreferenceModeLabel(): string
+    {
+        return self::PREFERENCE_MODE_LABELS[$this->pairing_preference_mode] ?? 'Desconhecido';
+    }
+
+    // Retorna label de ativo
+    public function getActiveLabel(): string
+    {
+        return $this->is_active ? 'Ativo' : 'Inativo';
+    }
+
+    // Retorna contagem de relacionamentos
+    public function getRelationshipsCount(): array
+    {
+        return [
+            'fixed_pairs_as_one' => $this->fixedPairsAsOne()->count(),
+            'fixed_pairs_as_two' => $this->fixedPairsAsTwo()->count(),
+            'total_fixed_pairs' => $this->fixedPairsAsOne()->count() + $this->fixedPairsAsTwo()->count(),
+            'restrictions_made' => $this->requestedRestrictions()->count(),
+            'restrictions_received' => $this->restrictedByOthers()->count(),
+            'preferences_made' => $this->requestedPreferences()->count(),
+            'preferences_received' => $this->preferredByOthers()->count()
+        ];
+    }
+
+    // Verifica se o publisher pode ser desativado
+    public function canBeDeactivated(): array
+    {
+        $hasFixedPairs = $this->fixedPairsAsOne()->exists() || $this->fixedPairsAsTwo()->exists();
+        $hasRestrictions = $this->requestedRestrictions()->exists() || $this->restrictedByOthers()->exists();
+        $hasPreferences = $this->requestedPreferences()->exists() || $this->preferredByOthers()->exists();
+
+        return [
+            'can_deactivate' => !$hasFixedPairs && !$hasRestrictions && !$hasPreferences,
+            'has_fixed_pairs' => $hasFixedPairs,
+            'has_restrictions' => $hasRestrictions,
+            'has_preferences' => $hasPreferences,
+            'fixed_pairs_count' => $this->fixedPairsAsOne()->count() + $this->fixedPairsAsTwo()->count(),
+            'restrictions_count' => $this->requestedRestrictions()->count() + $this->restrictedByOthers()->count(),
+            'preferences_count' => $this->requestedPreferences()->count() + $this->preferredByOthers()->count()
+        ];
+    }
+
+    // Scopes
     public function scopeActive($query)
     {
         return $query->where('is_active', true);
     }
 
+    public function scopeInactive($query)
+    {
+        return $query->where('is_active', false);
+    }
+
     public function scopePioneers($query)
     {
         return $query->where('is_pioneer', true);
+    }
+
+    public function scopeByGender($query, string $gender)
+    {
+        return $query->where('gender', $gender);
     }
 
     public function scopePreferenceModeOnly($query)
@@ -126,25 +184,8 @@ class Publisher extends Model
         return $query->where('pairing_preference_mode', self::PREFERENCE_MODE_PRIORITY);
     }
 
-    // Relacionamentos com FixedPair (adicionados anteriormente)
-    public function fixedPairsAsOne()
+    public function scopeOrdered($query)
     {
-        return $this->hasMany(FixedPair::class, 'publisher_one_id');
-    }
-
-    public function fixedPairsAsTwo()
-    {
-        return $this->hasMany(FixedPair::class, 'publisher_two_id');
-    }
-
-    // Relacionamentos com Restrições (adicionados anteriormente)
-    public function requestedRestrictions()
-    {
-        return $this->hasMany(PublisherPairRestriction::class, 'requester_publisher_id');
-    }
-
-    public function restrictedByOthers()
-    {
-        return $this->hasMany(PublisherPairRestriction::class, 'restricted_publisher_id');
+        return $query->orderBy('name');
     }
 }

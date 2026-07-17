@@ -53,28 +53,15 @@ class FixedPair extends Model
         return $this->weekdayTimeSlot->timeSlot ?? null;
     }
 
-    // Scope para filtrar por publisher
-    public function scopeForPublisher($query, $publisherId)
-    {
-        return $query->where('publisher_one_id', $publisherId)
-                     ->orWhere('publisher_two_id', $publisherId);
-    }
-
-    // Scope para filtrar por weekday_time_slot
-    public function scopeForWeekdayTimeSlot($query, $weekdayTimeSlotId)
-    {
-        return $query->where('weekday_time_slot_id', $weekdayTimeSlotId);
-    }
-
     // Verifica se um publisher está no par
-    public function hasPublisher($publisherId)
+    public function hasPublisher(int $publisherId): bool
     {
         return $this->publisher_one_id === $publisherId || 
                $this->publisher_two_id === $publisherId;
     }
 
     // Retorna o outro publisher do par
-    public function getOtherPublisher($publisherId)
+    public function getOtherPublisher(int $publisherId): ?Publisher
     {
         if ($this->publisher_one_id === $publisherId) {
             return $this->publisherTwo;
@@ -83,5 +70,44 @@ class FixedPair extends Model
             return $this->publisherOne;
         }
         return null;
+    }
+
+    // Verifica se há restrição entre os publishers
+    public function hasRestrictions(): bool
+    {
+        return PublisherPairRestriction::hasAnyRestriction(
+            $this->publisher_one_id,
+            $this->publisher_two_id
+        );
+    }
+
+    // Scope para filtrar por publisher
+    public function scopeForPublisher($query, int $publisherId)
+    {
+        return $query->where('publisher_one_id', $publisherId)
+                     ->orWhere('publisher_two_id', $publisherId);
+    }
+
+    // Scope para filtrar por weekday_time_slot
+    public function scopeForWeekdayTimeSlot($query, int $weekdayTimeSlotId)
+    {
+        return $query->where('weekday_time_slot_id', $weekdayTimeSlotId);
+    }
+
+    // Scope para ordenar
+    public function scopeOrdered($query)
+    {
+        return $query->join('weekday_time_slots', 'fixed_pairs.weekday_time_slot_id', '=', 'weekday_time_slots.id')
+                     ->join('weekdays', 'weekday_time_slots.weekday_id', '=', 'weekdays.id')
+                     ->join('time_slots', 'weekday_time_slots.time_slot_id', '=', 'time_slots.id')
+                     ->orderBy('weekdays.display_order')
+                     ->orderBy('time_slots.start_time')
+                     ->select('fixed_pairs.*');
+    }
+
+    // Retorna nome completo para exibição
+    public function getFullNameAttribute(): string
+    {
+        return $this->publisherOne->name . ' x ' . $this->publisherTwo->name;
     }
 }
